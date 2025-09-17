@@ -1,5 +1,9 @@
 # Changelog
 
+## [v1.0.6] - `2025-09-17`
+
+- Updated dependencies version
+
 ## [v1.0.5] - `2025-08-28`
 
 - Updated dependencies version
@@ -26,6 +30,8 @@
 - Transfer project to `owlsome-official`
 
 ## v0 is Legacy version
+
+[v1.0.6]: https://github.com/owlsome-official/cipherPayload/releases/tag/v1.0.6
 [v1.0.5]: https://github.com/owlsome-official/cipherPayload/releases/tag/v1.0.5
 [v1.0.4]: https://github.com/owlsome-official/cipherPayload/releases/tag/v1.0.4
 [v1.0.3]: https://github.com/owlsome-official/cipherPayload/releases/tag/v1.0.3
