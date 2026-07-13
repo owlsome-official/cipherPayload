@@ -1,6 +1,6 @@
 # CipherPayload
 
-[![made-with-Go](https://img.shields.io/badge/Made%20with-Go-1f425f.svg)](http://golang.org) [![Go Reference](https://pkg.go.dev/badge/github.com/owlsome-official/cipherPayload@v1.0.8.svg)](https://pkg.go.dev/github.com/owlsome-official/cipherPayload@v1.0.8) [![GitHub issues](https://img.shields.io/github/issues/owlsome-official/cipherPayload)](https://github.com/owlsome-official/cipherPayload/issues) [![GitHub forks](https://img.shields.io/github/forks/owlsome-official/cipherPayload)](https://github.com/owlsome-official/cipherPayload/network) [![GitHub stars](https://img.shields.io/github/stars/owlsome-official/cipherPayload)](https://github.com/owlsome-official/cipherPayload/stargazers)
+[![made-with-Go](https://img.shields.io/badge/Made%20with-Go-1f425f.svg)](http://golang.org) [![Go Reference](https://pkg.go.dev/badge/github.com/owlsome-official/cipherPayload@v1.0.9.svg)](https://pkg.go.dev/github.com/owlsome-official/cipherPayload@v1.0.9) [![GitHub issues](https://img.shields.io/github/issues/owlsome-official/cipherPayload)](https://github.com/owlsome-official/cipherPayload/issues) [![GitHub forks](https://img.shields.io/github/forks/owlsome-official/cipherPayload)](https://github.com/owlsome-official/cipherPayload/network) [![GitHub stars](https://img.shields.io/github/stars/owlsome-official/cipherPayload)](https://github.com/owlsome-official/cipherPayload/stargazers)
 
 CipherPayload middleware for Fiber that use AES Algorithm for encrypt and decrypt payload in request and response body.
 
@@ -19,6 +19,7 @@ CipherPayload middleware for Fiber that use AES Algorithm for encrypt and decryp
     - [Request](#request)
     - [Response](#response)
   - [Example Usage](#example-usage)
+  - [\[NEW!\] AES Encryption Tools (useful for debugging)](#new-aes-encryption-tools-useful-for-debugging)
 
 ## Installation
 
