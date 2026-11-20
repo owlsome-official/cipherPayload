@@ -23,18 +23,8 @@ func New(config ...Config) fiber.Handler {
 	}
 
 	// config is required
-	if len(cfg.KeyPairs.AESIVForEncrypt) == 0 {
-		panic(panicResponseHeader + "`AESIVForEncrypt` is required.")
-	}
-
-	// config is required
 	if len(cfg.KeyPairs.AESKeyForDecrypt) == 0 {
 		panic(panicResponseHeader + "`AESKeyForDecrypt` is required.")
-	}
-
-	// config is required
-	if len(cfg.KeyPairs.AESIVForDecrypt) == 0 {
-		panic(panicResponseHeader + "`AESIVForDecrypt` is required.")
 	}
 
 	return func(c *fiber.Ctx) error {

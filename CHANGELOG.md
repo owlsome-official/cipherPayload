@@ -1,5 +1,10 @@
 # Changelog
 
+## [Unreleased]
+
+- Security: payloads are now sealed with AES-GCM and a fresh random nonce per message (`base64(nonce || ciphertext || tag)`), instead of AES-CBC with the configured static IV, so identical bodies no longer produce identical ciphertexts and tampered payloads are rejected
+- Breaking: clients must use the new payload format; `KeyPairs.AESIVForEncrypt` and `KeyPairs.AESIVForDecrypt` are deprecated, ignored, and no longer required
+
 ## [v1.0.11] - `2026-11-09`
 
 - Updated dependencies version

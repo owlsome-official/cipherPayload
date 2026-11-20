@@ -4,6 +4,8 @@
 
 CipherPayload middleware for Fiber that use AES Algorithm for encrypt and decrypt payload in request and response body.
 
+Payloads are sealed with AES-GCM. Every message gets a fresh random 96-bit nonce, and the `payload` field is `base64(nonce || ciphertext || tag)`, so encrypting the same body twice gives different ciphertexts and any tampered payload is rejected.
+
 ## Table of Contents
 
 - [CipherPayload](#cipherpayload)
@@ -51,9 +53,7 @@ After you initiate your Fiber app, you can use the following possibilities:
 app.Use(cipherPayload.New(cipherPayload.Config{
   KeyPairs: cipherPayload.KeyPairs{
     AESKeyForEncrypt: []byte("AES_KEY_FOR_ENCRYPT"),
-    AESIVForEncrypt:  []byte("AES_IV_FOR_ENCRYPT"),
     AESKeyForDecrypt: []byte("AES_KEY_FOR_DECRYPT"),
-    AESIVForDecrypt:  []byte("AES_IV_FOR_DECRYPT"),
   },
 }))
 
@@ -61,9 +61,7 @@ app.Use(cipherPayload.New(cipherPayload.Config{
 app.Use(cipherPayload.New(cipherPayload.Config{
   KeyPairs: cipherPayload.KeyPairs{
     AESKeyForEncrypt: []byte("AES_KEY_FOR_ENCRYPT"),
-    AESIVForEncrypt:  []byte("AES_IV_FOR_ENCRYPT"),
     AESKeyForDecrypt: []byte("AES_KEY_FOR_DECRYPT"),
-    AESIVForDecrypt:  []byte("AES_IV_FOR_DECRYPT"),
   },
   AllowMethod: []string{"POST", "OPTIONS"},
   DebugMode: true,
@@ -153,12 +151,18 @@ func InternalServerErrorResponse(c *fiber.Ctx, msg string) error { // 500
 
 ```go
 type KeyPairs struct {
+  // AES-GCM key (16, 24, or 32 bytes) that seals response bodies.
   AESKeyForEncrypt []byte
-  AESIVForEncrypt  []byte
+  // Deprecated: ignored. A random nonce is generated for every message.
+  AESIVForEncrypt []byte
+  // AES-GCM key (16, 24, or 32 bytes) that opens request bodies.
   AESKeyForDecrypt []byte
-  AESIVForDecrypt  []byte
+  // Deprecated: ignored. The nonce is read from each encrypted payload.
+  AESIVForDecrypt []byte
 }
 ```
+
+A key must not seal more than 2^32 messages, to keep random nonce collisions negligible.
 
 ## Payload Template
 
@@ -168,7 +172,7 @@ An example of payload template (see more how to work in [Example](./example))
 
 ```json
 {
-  "payload": "FDp1Dl31zGx5nRXFNKihB+k3ly/L7HI9tlHycbKVRwhaf3RRdyFGviuntEZqst0/"
+  "payload": "sEzOJrY5UqIAygEfdifo09eNs3lcF31hyz2PVbQmUlR7v30MkI2z+7TzohkwFItML/JbLav4vZe5UiHQhGwBVutoj+avI+33ilA="
 }
 ```
 
@@ -185,7 +189,7 @@ which can be decrypt to:
 
 ```json
 {
-  "payload": "tpkWPEI6F/nfgUjjtwyKSUf1erxPL6rQt8jG3RitQ1KpvRALfR5YAgQ0CXYkrwLfTid6VdK3SNlffuu/kvI7Hj7br0ur01TUFUWxQ9cl+8U="
+  "payload": "<base64(nonce || ciphertext || tag), different on every response>"
 }
 ```
 
@@ -198,12 +202,10 @@ which encrypted from:
 }
 ```
 
-Note: This payload using
+Note: This payload uses the demo keys from [example/main.go](./example/main.go)
 
-- AESKeyForEncrypt (used in encrypting response body): `67890123456789012345678901234567`
-- AESIVForEncrypt (used in encrypting response body): `6789012345678901`
-- AESKeyForDecrypt (used in decrypting request body): `12345678901234567890123456789012`
-- AESIVForDecrypt (used in decrypting request body): `1234567890123456`
+- AESKeyForEncrypt (used in encrypting response body): `12345678901234567890123456789012`
+- AESKeyForDecrypt (used in decrypting request body): `67890123456789012345678901234567`
 
 ## Example Usage
 

@@ -82,10 +82,14 @@ type PayloadBody struct {
 }
 
 type KeyPairs struct {
+	// AES-GCM key (16, 24, or 32 bytes) that seals response bodies.
 	AESKeyForEncrypt []byte
-	AESIVForEncrypt  []byte
+	// Deprecated: ignored. A random nonce is generated for every message.
+	AESIVForEncrypt []byte
+	// AES-GCM key (16, 24, or 32 bytes) that opens request bodies.
 	AESKeyForDecrypt []byte
-	AESIVForDecrypt  []byte
+	// Deprecated: ignored. The nonce is read from each encrypted payload.
+	AESIVForDecrypt []byte
 }
 
 func BadRequestResponse(c *fiber.Ctx, msg string) error { // 400
