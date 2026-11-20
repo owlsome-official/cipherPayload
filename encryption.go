@@ -1,7 +1,6 @@
 package cipherPayload
 
 import (
-	"bytes"
 	"crypto/aes"
 	"crypto/cipher"
 	"encoding/base64"
@@ -9,23 +8,28 @@ import (
 )
 
 var (
-	// ErrInvalidBlockSize indicates hash blocksize <= 0.
+	// ErrInvalidCiphertext indicates the payload is not valid base64 or fails
+	// authentication (tampered, truncated, or sealed with another key).
+	ErrInvalidCiphertext = errors.New("invalid ciphertext")
+
+	// Deprecated: no longer returned; payloads are sealed with AES-GCM.
 	ErrInvalidBlockSize = errors.New("invalid blocksize")
 
-	// ErrInvalidPKCS7Data indicates bad input to PKCS7 pad or unpad.
+	// Deprecated: no longer returned; payloads are sealed with AES-GCM.
 	ErrInvalidPKCS7Data = errors.New("invalid PKCS7 data (empty or not padded)")
 
-	// ErrInvalidPKCS7Padding indicates PKCS7 unpad fails to bad input.
+	// Deprecated: no longer returned; payloads are sealed with AES-GCM.
 	ErrInvalidPKCS7Padding = errors.New("invalid padding on input")
 )
 
 type AES interface {
 	Encrypt(plainText string) (string, error)
 	Decrypt(encryptedText string) (string, error)
-	pkcs7Unpad(b []byte, blocksize int) ([]byte, error)
-	pkcs7Pad(b []byte, blocksize int) ([]byte, error)
 }
 
+// DefaultAESEncryption seals payloads with AES-GCM. Every message gets a fresh
+// random 96-bit nonce, so the encoded output is base64(nonce || ciphertext || tag).
+// A key must not seal more than 2^32 messages, to keep nonce collisions negligible.
 type DefaultAESEncryption struct {
 	keys   KeyPairs
 	logger logger
@@ -43,6 +47,14 @@ func NewAESEncryption(keys KeyPairs, debugMode ...bool) AES {
 	}
 }
 
+func newAEAD(key []byte) (cipher.AEAD, error) {
+	block, err := aes.NewCipher(key)
+	if err != nil {
+		return nil, err
+	}
+	return cipher.NewGCMWithRandomNonce(block)
+}
+
 func (d *DefaultAESEncryption) Encrypt(plainText string) (string, error) {
 	serviceName := "Encryption - AES - Encrypt"
 	d.logger.printf("info", serviceName)
@@ -51,22 +63,15 @@ func (d *DefaultAESEncryption) Encrypt(plainText string) (string, error) {
 		return "", nil
 	}
 
-	byteText := []byte(plainText)
-	block, err := aes.NewCipher(d.keys.AESKeyForEncrypt)
+	aead, err := newAEAD(d.keys.AESKeyForEncrypt)
 	if err != nil {
 		d.logger.printf("error", serviceName, err)
 		return "", err
 	}
 
-	defer recoveryCatch()
-	byteText, _ = d.pkcs7Pad(byteText, block.BlockSize())
+	sealed := aead.Seal(nil, nil, []byte(plainText), nil)
 
-	ciphertext := make([]byte, len(byteText))
-
-	bm := cipher.NewCBCEncrypter(block, d.keys.AESIVForEncrypt)
-	bm.CryptBlocks(ciphertext, byteText)
-
-	cipherText := base64.StdEncoding.EncodeToString(ciphertext)
+	cipherText := base64.StdEncoding.EncodeToString(sealed)
 	d.logger.printf("debug", "Encrypted:", cipherText)
 	return cipherText, nil
 }
@@ -78,64 +83,26 @@ func (d *DefaultAESEncryption) Decrypt(encryptedText string) (string, error) {
 	if encryptedText == "" {
 		return "", nil
 	}
-	ciphertext, _ := base64.StdEncoding.DecodeString(encryptedText)
-	block, err := aes.NewCipher(d.keys.AESKeyForDecrypt)
+
+	aead, err := newAEAD(d.keys.AESKeyForDecrypt)
 	if err != nil {
 		d.logger.printf("error", serviceName, err)
 		return "", err
 	}
 
-	defer recoveryCatch()
-	bm := cipher.NewCBCDecrypter(block, d.keys.AESIVForDecrypt)
-	bm.CryptBlocks(ciphertext, ciphertext)
-
-	out, err := d.pkcs7Unpad(ciphertext, aes.BlockSize)
+	sealed, err := base64.StdEncoding.DecodeString(encryptedText)
 	if err != nil {
 		d.logger.printf("error", serviceName, err)
-		return "", err
+		return "", ErrInvalidCiphertext
+	}
+
+	out, err := aead.Open(nil, nil, sealed, nil)
+	if err != nil {
+		d.logger.printf("error", serviceName, err)
+		return "", ErrInvalidCiphertext
 	}
 
 	plainText := string(out)
 	d.logger.printf("debug", "Decrypted:", plainText)
 	return plainText, nil
-}
-
-func (d DefaultAESEncryption) pkcs7Unpad(b []byte, blocksize int) ([]byte, error) {
-	if blocksize <= 0 {
-		return nil, ErrInvalidBlockSize
-	}
-	if b == nil {
-		return nil, ErrInvalidPKCS7Data
-	}
-	if len(b) == 0 {
-		return nil, ErrInvalidPKCS7Data
-	}
-	if len(b)%blocksize != 0 {
-		return nil, ErrInvalidPKCS7Padding
-	}
-	c := b[len(b)-1] // the last character
-	n := int(c)      // convert the last char into a number
-	if n == 0 || n > len(b) {
-		return nil, ErrInvalidPKCS7Padding
-	}
-	for i := 0; i < n; i++ {
-		if b[len(b)-n+i] != c {
-			return nil, ErrInvalidPKCS7Padding
-		}
-	}
-	return b[:len(b)-n], nil
-}
-
-func (d DefaultAESEncryption) pkcs7Pad(b []byte, blocksize int) ([]byte, error) {
-	if blocksize <= 0 {
-		return nil, ErrInvalidBlockSize
-	}
-	if b == nil {
-		return nil, ErrInvalidPKCS7Data
-	}
-	n := blocksize - (len(b) % blocksize)
-	pb := make([]byte, len(b)+n)
-	copy(pb, b)
-	copy(pb[len(b):], bytes.Repeat([]byte{byte(n)}, n))
-	return pb, nil
 }

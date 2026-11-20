@@ -16,12 +16,6 @@ func isExist(slice []string, target string) bool {
 	return false
 }
 
-func recoveryCatch() {
-	if r := recover(); r != nil {
-		log.Debug().Msgf("Recovered in f: %v", r)
-	}
-}
-
 // Logger
 type logger interface {
 	printf(logType string, anything ...interface{})

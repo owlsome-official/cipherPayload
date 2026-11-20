@@ -1,6 +1,7 @@
 package cipherPayload
 
 import (
+	"encoding/base64"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -8,9 +9,7 @@ import (
 
 var (
 	aesKeyForEncrypt []byte
-	aesIVForEncrypt  []byte
 	aesKeyForDecrypt []byte
-	aesIVForDecrypt  []byte
 
 	keys KeyPairs
 )
@@ -21,16 +20,73 @@ func init() {
 
 func setAValidConfig() {
 	aesKeyForEncrypt = []byte("12345678901234567890123456789012")
-	aesIVForEncrypt = []byte("1234567890123456")
 	aesKeyForDecrypt = []byte("67890123456789012345678901234567")
-	aesIVForDecrypt = []byte("6789012345678901")
 
 	keys = KeyPairs{
-		aesKeyForEncrypt,
-		aesIVForEncrypt,
-		aesKeyForDecrypt,
-		aesIVForDecrypt,
+		AESKeyForEncrypt: aesKeyForEncrypt,
+		AESKeyForDecrypt: aesKeyForDecrypt,
 	}
+}
+
+// loopbackKeys decrypts what keys encrypts, like a client talking to itself.
+func loopbackKeys() KeyPairs {
+	return KeyPairs{
+		AESKeyForEncrypt: aesKeyForDecrypt,
+		AESKeyForDecrypt: aesKeyForDecrypt,
+	}
+}
+
+func TestEncryptDecryptRoundTrip(t *testing.T) {
+	setAValidConfig()
+	d := NewAESEncryption(loopbackKeys())
+
+	sealed, err := d.Encrypt("1234567890121")
+	require.NoError(t, err)
+
+	opened, err := d.Decrypt(sealed)
+	require.NoError(t, err)
+	require.Equal(t, "1234567890121", opened)
+}
+
+func TestEncryptIsRandomized(t *testing.T) {
+	setAValidConfig()
+	d := NewAESEncryption(keys)
+
+	first, err := d.Encrypt("1234567890121")
+	require.NoError(t, err)
+	second, err := d.Encrypt("1234567890121")
+	require.NoError(t, err)
+
+	require.NotEqual(t, first, second)
+}
+
+func TestDecryptRejectsTamperedOrTruncatedPayload(t *testing.T) {
+	setAValidConfig()
+	d := NewAESEncryption(loopbackKeys())
+
+	sealed, err := d.Encrypt(`{"taxId":"1234567890121"}`)
+	require.NoError(t, err)
+	raw, err := base64.StdEncoding.DecodeString(sealed)
+	require.NoError(t, err)
+
+	tampered := append([]byte(nil), raw...)
+	tampered[len(tampered)-1] ^= 0x01
+	truncated := raw[:len(raw)-1]
+
+	for name, payload := range map[string][]byte{"tampered": tampered, "truncated": truncated} {
+		t.Run(name, func(t *testing.T) {
+			opened, err := d.Decrypt(base64.StdEncoding.EncodeToString(payload))
+			require.ErrorIs(t, err, ErrInvalidCiphertext)
+			require.Empty(t, opened)
+		})
+	}
+
+	t.Run("wrong key", func(t *testing.T) {
+		wrongKey := KeyPairs{AESKeyForDecrypt: aesKeyForEncrypt}
+		opened, err := NewAESEncryption(wrongKey).Decrypt(sealed)
+		require.ErrorIs(t, err, ErrInvalidCiphertext)
+		require.Empty(t, opened)
+	})
 }
 
 type testCaseEncryption struct {
@@ -86,11 +142,6 @@ func TestDecryptionAES(t *testing.T) {
 
 	tests := []testCaseEncryption{
 		{
-			name:     "Decryption Success",
-			input:    "ldQtpqnEQarFB3RK1JMqSA==",
-			expected: "1234567890121",
-		},
-		{
 			name:     "Decryption Success - Empty Case",
 			input:    "",
 			expected: "",
@@ -131,103 +182,4 @@ func TestDecryptionAES(t *testing.T) {
 		require.Error(t, err)
 	})
 	keys = aesKeyPairsBackup
-}
-
-func TestPkcs7Unpad(t *testing.T) {
-	tests := []struct {
-		name           string
-		inputByte      []byte
-		inputBlocksize int
-		expected       []byte
-		expectedErr    error
-	}{
-		{
-			name:           "Invalid Blocksize - Zero",
-			inputByte:      []byte(""),
-			inputBlocksize: 0,
-			expected:       []byte(nil),
-			expectedErr:    ErrInvalidBlockSize,
-		},
-		{
-			name:           "Invalid InputByte - Nil",
-			inputByte:      []byte(nil),
-			inputBlocksize: 2,
-			expected:       []byte(nil),
-			expectedErr:    ErrInvalidPKCS7Data,
-		},
-		{
-			name:           "Invalid Padding - Modulo != 0",
-			inputByte:      []byte("abc"),
-			inputBlocksize: 2,
-			expected:       []byte(nil),
-			expectedErr:    ErrInvalidPKCS7Padding,
-		},
-		{
-			name:           "Invalid Padding - Trailing with space",
-			inputByte:      []byte("abc "),
-			inputBlocksize: 4,
-			expected:       []byte(nil),
-			expectedErr:    ErrInvalidPKCS7Padding,
-		},
-		{
-			name: "Invalid Padding - Trailing with tab space",
-			inputByte: []byte("y/hNE1N17iIxSqvM0IWidQ=	"),
-			inputBlocksize: 24,
-			expected:       []byte(nil),
-			expectedErr:    ErrInvalidPKCS7Padding,
-		},
-	}
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			inputByte := test.inputByte
-			inputBlocksize := test.inputBlocksize
-			expected := test.expected
-			expectedErr := test.expectedErr
-
-			d := NewAESEncryption(keys)
-			actual, actualErr := d.pkcs7Unpad(inputByte, inputBlocksize)
-
-			require.Equal(t, expected, actual)
-			require.Equal(t, expectedErr, actualErr)
-		})
-	}
-}
-
-func TestPkcs7Pad(t *testing.T) {
-	tests := []struct {
-		name           string
-		inputByte      []byte
-		inputBlocksize int
-		expected       []byte
-		expectedErr    error
-	}{
-		{
-			name:           "Invalid Blocksize - Lower than Zero",
-			inputByte:      []byte(""),
-			inputBlocksize: -1,
-			expected:       []byte(nil),
-			expectedErr:    ErrInvalidBlockSize,
-		},
-		{
-			name:           "Invalid Data - Empty",
-			inputByte:      []byte(nil),
-			inputBlocksize: 2,
-			expected:       []byte(nil),
-			expectedErr:    ErrInvalidPKCS7Data,
-		},
-	}
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			inputByte := test.inputByte
-			inputBlocksize := test.inputBlocksize
-			expected := test.expected
-			expectedErr := test.expectedErr
-
-			d := NewAESEncryption(keys)
-			actual, actualErr := d.pkcs7Pad(inputByte, inputBlocksize)
-
-			require.Equal(t, expected, actual)
-			require.Equal(t, expectedErr, actualErr)
-		})
-	}
 }
