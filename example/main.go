@@ -11,16 +11,12 @@ import (
 
 var (
 	aesSecretKeyForEncrypt []byte
-	aesSecretIVForEncrypt  []byte
 	aesSecretKeyForDecrypt []byte
-	aesSecretIVForDecrypt  []byte
 )
 
 func init() {
 	aesSecretKeyForEncrypt = []byte("12345678901234567890123456789012")
-	aesSecretIVForEncrypt = []byte("1234567890123456")
 	aesSecretKeyForDecrypt = []byte("67890123456789012345678901234567")
-	aesSecretIVForDecrypt = []byte("6789012345678901")
 
 	// UNIX Time is faster and smaller than most timestamps
 	zerolog.TimeFieldFormat = zerolog.TimeFormatUnix
@@ -41,9 +37,7 @@ func main() {
 	appCipher.Use(cipherPayload.New(cipherPayload.Config{
 		KeyPairs: cipherPayload.KeyPairs{
 			AESKeyForEncrypt: aesSecretKeyForEncrypt,
-			AESIVForEncrypt:  aesSecretIVForEncrypt,
 			AESKeyForDecrypt: aesSecretKeyForDecrypt,
-			AESIVForDecrypt:  aesSecretIVForDecrypt,
 		},
 		DebugMode: true,
 	}))

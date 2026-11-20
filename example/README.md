@@ -60,8 +60,8 @@ v0.1.0
 ### Step 3: Try to call: POST `/api/example` API
 
 ```bash
-curl --request POST --url http://localhost:8000/api/example --data '{"payload": "FDp1Dl31zGx5nRXFNKihB+k3ly/L7HI9tlHycbKVRwhaf3RRdyFGviuntEZqst0/"}'
-{"payload":"bV5rjs84VS6onHizxuVPAg=="}
+curl --request POST --url http://localhost:8000/api/example --header 'Content-Type: application/json' --data '{"payload": "sEzOJrY5UqIAygEfdifo09eNs3lcF31hyz2PVbQmUlR7v30MkI2z+7TzohkwFItML/JbLav4vZe5UiHQhGwBVutoj+avI+33ilA="}'
+{"payload":"<AES-GCM sealed response, different on every call>"}
 ```
 
 ## Tips: "Burn and Learn" with
