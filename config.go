@@ -20,7 +20,8 @@ type Config struct {
 	// Optional. [Default: false]
 	StrictMode bool
 
-	// Optional. Default: true
+	// Optional. Default: true in ConfigDefault, false when omitted from a passed Config.
+	// When true, requests whose path (query string excluded) is /health or ends in /health skip encryption.
 	ExcludeHealthAPI bool
 
 	// Optional. Default: BadRequestResponse
@@ -62,7 +63,7 @@ func configDefault(config ...Config) Config {
 
 	// Note: cfg.DebugMode: it's false by default.
 	// Note: cfg.StrictMode: it's false by default.
-	// NOTE: cfg.ExcludeHealthAPI: it's true by default
+	// Note: cfg.ExcludeHealthAPI: it's false unless set, because a bool zero value cannot be told apart from an explicit false.
 
 	// set default values
 	if cfg.FailResponse == nil {
