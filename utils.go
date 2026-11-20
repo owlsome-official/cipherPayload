@@ -16,6 +16,11 @@ func isExist(slice []string, target string) bool {
 	return false
 }
 
+// isHealthPath expects a path without its query string and matches case-sensitively.
+func isHealthPath(path string) bool {
+	return strings.HasSuffix(strings.TrimRight(path, "/"), "/health")
+}
+
 func recoveryCatch() {
 	if r := recover(); r != nil {
 		log.Debug().Msgf("Recovered in f: %v", r)

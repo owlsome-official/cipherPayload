@@ -92,7 +92,10 @@ type Config struct {
   // Optional. [Default: false]
   StrictMode bool
 
-  // Optional. Default: true
+  // Optional. Default: true in ConfigDefault, false when omitted from a passed Config.
+  // When true, requests whose path (query string excluded) is /health or ends in /health skip encryption.
+  // This includes parameter or wildcard routes (e.g. /api/:id, /api/*) whose last segment is "health",
+  // so leave it false and use Next if such routes must stay encrypted.
   ExcludeHealthAPI bool
 
   // Optional. Default: BadRequestResponse
