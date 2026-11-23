@@ -8,7 +8,14 @@ type Config struct {
 	// Optional. Default: nil
 	Next func(c *fiber.Ctx) bool
 
+	// Optional. Default: ModeGCM
+	// ModeGCM: AES-GCM with random 12-byte nonce per message (authenticated encryption).
+	// ModeCBC: AES-CBC with PKCS#7 padding and fixed IV from KeyPairs (legacy).
+	Mode CipherMode
+
 	// Required. Default: KeyPairs{}
+	// For ModeGCM: only AESKeyForEncrypt and AESKeyForDecrypt are required (IV fields are ignored).
+	// For ModeCBC: all four fields (key + IV) are required.
 	KeyPairs KeyPairs
 
 	// Optional. Default: OPTIONS, POST, PUT, DELETE
@@ -33,6 +40,7 @@ type Config struct {
 
 var ConfigDefault = Config{
 	Next:     nil,
+	Mode:     ModeGCM,
 	KeyPairs: KeyPairs{},
 	AllowMethod: []string{
 		fiber.MethodOptions,
@@ -59,6 +67,10 @@ func configDefault(config ...Config) Config {
 	// set default values
 	if cfg.AllowMethod == nil {
 		cfg.AllowMethod = ConfigDefault.AllowMethod
+	}
+
+	if cfg.Mode == "" {
+		cfg.Mode = ConfigDefault.Mode
 	}
 
 	// Note: cfg.DebugMode: it's false by default.

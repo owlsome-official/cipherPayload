@@ -1,6 +1,11 @@
 // Note: You should install VSCode Extension: REST Client, first.
+// Run `go run main.go` to start all three servers before testing.
 
-### WithoutCipherPayload Example POST
+// ==========================================
+// :5000 - Plaintext API (no encryption)
+// ==========================================
+
+### [Plaintext] POST /api/example
 POST http://localhost:5000/api/example HTTP/1.1
 content-type: application/json
 
@@ -9,28 +14,127 @@ content-type: application/json
   "lastname": "Chimdee"
 }
 
-### WithCipherPayload Example POST
+### [Plaintext] POST /api/example - tax_id
+POST http://localhost:5000/api/example HTTP/1.1
+content-type: application/json
+
+{
+  "key": "tax_id",
+  "value": "1234567890121"
+}
+
+// ==========================================
+// :8000 - AES-GCM API (v2 default)
+// ==========================================
+//
+// GCM uses a random nonce per message, so the same plaintext
+// produces different ciphertext each time. The response payload
+// will also change on every call.
+//
+// Keys:
+//   Server decrypt key (encrypt your request with this): 67890123456789012345678901234567
+//   Server encrypt key (decrypt the response with this): 12345678901234567890123456789012
+//
+// Use https://encrypt-tools.vercel.app/ (AES-GCM mode) to generate/verify payloads.
+
+### [GCM] POST /api/example - {"firstname":"Chinnawat","lastname":"Chimdee"}
+// Encrypted with key: 67890123456789012345678901234567
+// Expected decrypted response: {"firstname":"Chinnawat [Modified]","lastname":"Chimdee [Modified]"}
 POST http://localhost:8000/api/example HTTP/1.1
 content-type: application/json
 
-# The encrypted body of {\"firstname\":\"Chinnawat\",\"lastname\":\"Chimdee\"}
-# ...Should reply: { "payload": "tpkWPEI6F/nfgUjjtwyKSUf1erxPL6rQt8jG3RitQ1KpvRALfR5YAgQ0CXYkrwLfTid6VdK3SNlffuu/kvI7Hj7br0ur01TUFUWxQ9cl+8U=" }
-# ...Which means: {\"firstname\":\"Chinnawat [Modified]\",\"lastname\":\"Chimdee [Modified]\"}
-{"payload": "FDp1Dl31zGx5nRXFNKihB+k3ly/L7HI9tlHycbKVRwhaf3RRdyFGviuntEZqst0/"} 
+{"payload": "P3HIeiBeax1m9XuWBy/xjsPL0Wb3q9KH388grh3qIlwRHJsh5SpvAFIGko1+3ZXOOx+zNLDzjxqjcOADLlAtszlgKAktt5rOZYE="}
 
-# The encrypted body of {\"firstname\":\"Wat\",\"lastname\":\"Chimdee\"}
-# ...Should reply: { "payload": "gVnkw9TzoWPhT7rpImJPtA/G8GCvSSPyFNF7Z3dNX83Vr38CkKs+VLFbxbo283KrwHdqcBwX0FDRS88Fxua82Q==" }
-# ...Which means: {\"firstname\":\"Wat [Modified]\",\"lastname\":\"Chimdee [Modified]\"}
-# {"payload": "xnsOKHZTn4WYVWXt9VK4JT+XK9/oUNAbWVjGBJVeZ1uUEzoeWV4Zcu3v+F/SqCNm"}
-
-# The encrypted body of {\"key\":\"tax_id\",\"value\":\"1234567890121\"}
-# ...Should reply: { "payload": "Y1E19OBvnC+IRwwdrGsVxfI0rvQ8sfkqFtlL0D5NHfauEddy13a9YWEwJeSfC1iiwjPHOwkfb/VVLKw12E1KDQ==" }
-# ...Which means: {\"key\":\"tax_id [Modified]\",\"value\":\"1234567890121 [Modified]\"}
-# {"payload": "Be/0wN/7rRLYMONwySAWH0NfSNckuaYXsmb1JgZDFRsNnum+2JGnMTxuNa3iECEe"}
-
-
-### EmptyPayload Example POST
+### [GCM] POST /api/example - {"key":"tax_id","value":"1234567890121"}
+// Encrypted with key: 67890123456789012345678901234567
+// Expected decrypted response: {"key":"tax_id [Modified]","value":"1234567890121 [Modified]"}
 POST http://localhost:8000/api/example HTTP/1.1
+content-type: application/json
+
+{"payload": "VKOAoFVYod2Xr60AIoZoMF6jnnbTal9lc+tAQti7HJs+2fkVAIvTkNxWygKa4qGG/qbo5LMemh3MT1TX+qxi4i0wzcA="}
+
+### [GCM] POST /api/example - Empty payload
+POST http://localhost:8000/api/example HTTP/1.1
+content-type: application/json
+
+{}
+
+// ==========================================
+// :8001 - AES-GCM + StrictMode (error showcase)
+// ==========================================
+//
+// StrictMode returns proper error responses instead of silently
+// passing through. These cases demonstrate 400 Bad Request
+// for invalid/tampered/missing payloads.
+
+### [Strict] 400 Bad Request - Empty body (no payload field)
+// Expected: 400 {"status":"bad_request","message":"Invalid Payload"}
+POST http://localhost:8001/api/example HTTP/1.1
+content-type: application/json
+
+{}
+
+### [Strict] 400 Bad Request - Tampered GCM payload (flipped byte)
+// This payload has a tampered byte -- GCM detects authentication failure.
+// Expected: 400 {"status":"bad_request","message":"Payload decrypt fail or Empty payload"}
+POST http://localhost:8001/api/example HTTP/1.1
+content-type: application/json
+
+{"payload": "P3HIeiBeax1m9XuWBy/xjsPL0Wb3q9KH388grh3qIlwRHJsh5SpvAFIGko1+3ZXOAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="}
+
+### [Strict] 400 Bad Request - Invalid base64
+// Expected: 400 {"status":"bad_request","message":"Payload decrypt fail or Empty payload"}
+POST http://localhost:8001/api/example HTTP/1.1
+content-type: application/json
+
+{"payload": "!!!this-is-not-valid-base64!!!"}
+
+### [Strict] 400 Bad Request - CBC payload sent to GCM server
+// This payload was encrypted with AES-CBC, but the server expects AES-GCM.
+// Expected: 400 {"status":"bad_request","message":"Payload decrypt fail or Empty payload"}
+POST http://localhost:8001/api/example HTTP/1.1
+content-type: application/json
+
+{"payload": "FDp1Dl31zGx5nRXFNKihB+k3ly/L7HI9tlHycbKVRwhaf3RRdyFGviuntEZqst0/"}
+
+### [Strict] 400 Bad Request - Payload encrypted with wrong key
+// Encrypted with a different key, server cannot decrypt it.
+// Expected: 400 {"status":"bad_request","message":"Payload decrypt fail or Empty payload"}
+POST http://localhost:8001/api/example HTTP/1.1
+content-type: application/json
+
+{"payload": "AAAAAAAAAAAABBBBBBBBBBBBCCCCCCCCCCCCDDDDDDDDDDDDEEEEEEEEEEEE"}
+
+// ==========================================
+// :9000 - AES-CBC API (legacy)
+// ==========================================
+//
+// CBC uses a fixed IV, so the same plaintext always produces the
+// same ciphertext (deterministic).
+//
+// Keys:
+//   Server decrypt key: 67890123456789012345678901234567, IV: 6789012345678901
+//   Server encrypt key: 12345678901234567890123456789012, IV: 1234567890123456
+
+### [CBC] POST /api/example - {"firstname":"Chinnawat","lastname":"Chimdee"}
+// Encrypted with key: 67890123456789012345678901234567, IV: 6789012345678901
+// Expected response payload: tpkWPEI6F/nfgUjjtwyKSUf1erxPL6rQt8jG3RitQ1KpvRALfR5YAgQ0CXYkrwLfTid6VdK3SNlffuu/kvI7Hj7br0ur01TUFUWxQ9cl+8U=
+// Which decrypts to: {"firstname":"Chinnawat [Modified]","lastname":"Chimdee [Modified]"}
+POST http://localhost:9000/api/example HTTP/1.1
+content-type: application/json
+
+{"payload": "FDp1Dl31zGx5nRXFNKihB+k3ly/L7HI9tlHycbKVRwhaf3RRdyFGviuntEZqst0/"}
+
+### [CBC] POST /api/example - {"key":"tax_id","value":"1234567890121"}
+// Encrypted with key: 67890123456789012345678901234567, IV: 6789012345678901
+// Expected decrypted response: {"key":"tax_id [Modified]","value":"1234567890121 [Modified]"}
+POST http://localhost:9000/api/example HTTP/1.1
+content-type: application/json
+
+{"payload": "Be/0wN/7rRLYMONwySAWH0NfSNckuaYXsmb1JgZDFRsNnum+2JGnMTxuNa3iECEe"}
+
+### [CBC] POST /api/example - Empty payload
+POST http://localhost:9000/api/example HTTP/1.1
 content-type: application/json
 
 {}

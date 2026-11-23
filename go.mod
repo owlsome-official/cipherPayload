@@ -1,4 +1,4 @@
-module github.com/owlsome-official/cipherPayload
+module github.com/owlsome-official/cipherPayload/v2
 
 go 1.27.4
 

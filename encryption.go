@@ -19,6 +19,8 @@ var (
 	ErrInvalidPKCS7Padding = errors.New("invalid padding on input")
 )
 
+// AES is the legacy interface kept for backward compatibility.
+// Deprecated: Use Cipher interface with NewCipher instead.
 type AES interface {
 	Encrypt(plainText string) (string, error)
 	Decrypt(encryptedText string) (string, error)
@@ -26,25 +28,28 @@ type AES interface {
 	pkcs7Pad(b []byte, blocksize int) ([]byte, error)
 }
 
-type DefaultAESEncryption struct {
+// CBCEncryption implements both Cipher and AES using AES-CBC with PKCS#7 padding.
+type CBCEncryption struct {
 	keys   KeyPairs
 	logger logger
 }
 
+// NewAESEncryption creates a CBC cipher.
+// Deprecated: Use NewCipher(ModeCBC, keys, debugMode...) instead.
 func NewAESEncryption(keys KeyPairs, debugMode ...bool) AES {
 	isShowLog := false
 	if len(debugMode) > 0 {
-		isShowLog = bool(debugMode[0])
+		isShowLog = debugMode[0]
 	}
 	logger := newLogger(isShowLog)
-	return &DefaultAESEncryption{
+	return &CBCEncryption{
 		keys:   keys,
 		logger: logger,
 	}
 }
 
-func (d *DefaultAESEncryption) Encrypt(plainText string) (string, error) {
-	serviceName := "Encryption - AES - Encrypt"
+func (d *CBCEncryption) Encrypt(plainText string) (string, error) {
+	serviceName := "Encryption - AES-CBC - Encrypt"
 	d.logger.printf("info", serviceName)
 
 	if plainText == "" {
@@ -71,8 +76,8 @@ func (d *DefaultAESEncryption) Encrypt(plainText string) (string, error) {
 	return cipherText, nil
 }
 
-func (d *DefaultAESEncryption) Decrypt(encryptedText string) (string, error) {
-	serviceName := "Encryption - AES - Decrypt"
+func (d *CBCEncryption) Decrypt(encryptedText string) (string, error) {
+	serviceName := "Encryption - AES-CBC - Decrypt"
 	d.logger.printf("info", serviceName)
 
 	if encryptedText == "" {
@@ -100,7 +105,7 @@ func (d *DefaultAESEncryption) Decrypt(encryptedText string) (string, error) {
 	return plainText, nil
 }
 
-func (d DefaultAESEncryption) pkcs7Unpad(b []byte, blocksize int) ([]byte, error) {
+func (d CBCEncryption) pkcs7Unpad(b []byte, blocksize int) ([]byte, error) {
 	if blocksize <= 0 {
 		return nil, ErrInvalidBlockSize
 	}
@@ -113,8 +118,8 @@ func (d DefaultAESEncryption) pkcs7Unpad(b []byte, blocksize int) ([]byte, error
 	if len(b)%blocksize != 0 {
 		return nil, ErrInvalidPKCS7Padding
 	}
-	c := b[len(b)-1] // the last character
-	n := int(c)      // convert the last char into a number
+	c := b[len(b)-1]
+	n := int(c)
 	if n == 0 || n > len(b) {
 		return nil, ErrInvalidPKCS7Padding
 	}
@@ -126,7 +131,7 @@ func (d DefaultAESEncryption) pkcs7Unpad(b []byte, blocksize int) ([]byte, error
 	return b[:len(b)-n], nil
 }
 
-func (d DefaultAESEncryption) pkcs7Pad(b []byte, blocksize int) ([]byte, error) {
+func (d CBCEncryption) pkcs7Pad(b []byte, blocksize int) ([]byte, error) {
 	if blocksize <= 0 {
 		return nil, ErrInvalidBlockSize
 	}

@@ -1,70 +1,113 @@
 # Example Usage
 
-## ☝️ Table of Contents
+## Table of Contents
 
 - [Example Usage](#example-usage)
-  - [☝️ Table of Contents](#️-table-of-contents)
-  - [📦 Dependencies](#-dependencies)
-  - [⚒ Structure](#-structure)
-  - [🏷 Versions](#-versions)
-  - [⚙ Get Started](#-get-started)
+  - [Dependencies](#dependencies)
+  - [Structure](#structure)
+  - [Servers](#servers)
+  - [Get Started](#get-started)
     - [Step 1: Initialize](#step-1-initialize)
-    - [Step 2: Go run `main.go`](#step-2-go-run-maingo)
-    - [Step 3: Try to call: POST `/api/example` API](#step-3-try-to-call-post-apiexample-api)
-  - [Tips: "Burn and Learn" with](#tips-burn-and-learn-with)
+    - [Step 2: Run](#step-2-run)
+    - [Step 3: Test](#step-3-test)
+  - [Tips](#tips)
 
-## 📦 Dependencies
+## Dependencies
 
-- [x] Golang with GoFiber v2
-- [x] Zerolog - Log Management
+- Go 1.27+ with GoFiber v2
+- Zerolog - Log Management
 
-## ⚒ Structure
+## Structure
 
 ```mermaid
-  graph LR;
-    Request--"{ payload:AES_ENCRYPTED }"-->CipherPayload-Decrypted
-    CipherPayload-Decrypted--"{ get_field: [firstname, surname] }"-->API
-    API--"{ firstname: Eren, lastname: Yeager }"-->CipherPayload-Encrypted
-    CipherPayload-Encrypted--"{ payload:AES_ENCRYPTED }"-->Response
+graph LR;
+  subgraph gcm [AES-GCM :8000]
+    RequestGCM["Request"]--"{ payload: GCM_ENCRYPTED }"-->DecryptGCM["CipherPayload Decrypt"]
+    DecryptGCM--"{ firstname, lastname }"-->APIGCM["Handler"]
+    APIGCM--"{ firstname: Modified }"-->EncryptGCM["CipherPayload Encrypt"]
+    EncryptGCM--"{ payload: GCM_ENCRYPTED }"-->ResponseGCM["Response"]
+  end
+
+  subgraph cbc [AES-CBC :9000 Legacy]
+    RequestCBC["Request"]--"{ payload: CBC_ENCRYPTED }"-->DecryptCBC["CipherPayload Decrypt"]
+    DecryptCBC--"{ firstname, lastname }"-->APICBC["Handler"]
+    APICBC--"{ firstname: Modified }"-->EncryptCBC["CipherPayload Encrypt"]
+    EncryptCBC--"{ payload: CBC_ENCRYPTED }"-->ResponseCBC["Response"]
+  end
 ```
 
-Alternative mermaid diagrams
-![Alternative mermaid diagrams](./image/mermaid.png)
+## Servers
 
-## 🏷 Versions
+| Port | Mode | Description |
+|------|------|-------------|
+| `:5000` | Plaintext | No encryption middleware |
+| `:8000` | AES-GCM | v2 default, authenticated encryption with random nonce |
+| `:8001` | AES-GCM + StrictMode | Error showcase (400/500 responses for invalid payloads) |
+| `:9000` | AES-CBC | Legacy mode with fixed IV, backward compatible |
 
-v0.2.0
-
-- Using 2-key pair for better securities
-
-v0.1.0
-
-- Initialized
-- API Endpoint for Plaintext `POST` [http://localhost:5000/api/example](http://localhost:5000/api/example)
-- API Endpoint for Ciphertext `POST` [http://localhost:8000/api/example](http://localhost:8000/api/example)
-
-## ⚙ Get Started
+## Get Started
 
 ### Step 1: Initialize
 
 ```bash
-  go mod tidy
+go mod tidy
 ```
 
-### Step 2: Go run `main.go`
+### Step 2: Run
 
 ```bash
-  go run main.go
+go run main.go
 ```
 
-### Step 3: Try to call: POST `/api/example` API
+### Step 3: Test
 
+**Plaintext API**:
 ```bash
-curl --request POST --url http://localhost:8000/api/example --data '{"payload": "FDp1Dl31zGx5nRXFNKihB+k3ly/L7HI9tlHycbKVRwhaf3RRdyFGviuntEZqst0/"}'
-{"payload":"bV5rjs84VS6onHizxuVPAg=="}
+curl -X POST http://localhost:5000/api/example \
+  -H "Content-Type: application/json" \
+  -d '{"firstname":"Chinnawat","lastname":"Chimdee"}'
 ```
 
-## Tips: "Burn and Learn" with
+**AES-CBC (legacy) API**:
+```bash
+curl -X POST http://localhost:9000/api/example \
+  -H "Content-Type: application/json" \
+  -d '{"payload":"FDp1Dl31zGx5nRXFNKihB+k3ly/L7HI9tlHycbKVRwhaf3RRdyFGviuntEZqst0/"}'
+```
 
+**AES-GCM API**: Use [encrypt-tools](https://encrypt-tools.vercel.app/) with AES-GCM mode to generate a payload, then:
+```bash
+curl -X POST http://localhost:8000/api/example \
+  -H "Content-Type: application/json" \
+  -d '{"payload":"<your GCM encrypted base64>"}'
+```
+
+**StrictMode Error Cases** (`:8001`):
+```bash
+# Empty body -> 400 Bad Request
+curl -X POST http://localhost:8001/api/example \
+  -H "Content-Type: application/json" \
+  -d '{}'
+
+# Tampered payload -> 400 Bad Request
+curl -X POST http://localhost:8001/api/example \
+  -H "Content-Type: application/json" \
+  -d '{"payload":"!!!invalid!!!"}'
+
+# CBC payload to GCM server -> 400 Bad Request
+curl -X POST http://localhost:8001/api/example \
+  -H "Content-Type: application/json" \
+  -d '{"payload":"FDp1Dl31zGx5nRXFNKihB+k3ly/L7HI9tlHycbKVRwhaf3RRdyFGviuntEZqst0/"}'
+```
+
+Demo keys:
+- Encrypt key (server decrypts request): `67890123456789012345678901234567`
+- Decrypt key (server encrypts response): `12345678901234567890123456789012`
+- CBC IV (encrypt): `6789012345678901`
+- CBC IV (decrypt): `1234567890123456`
+
+## Tips
+
+- [encrypt-tools](https://encrypt-tools.vercel.app/) - AES encryption/decryption tool (supports both GCM and CBC)
 - [Postman](https://www.postman.com/)
 - [VSCode Extension: REST Client](https://marketplace.visualstudio.com/items?itemName=humao.rest-client)

@@ -2,11 +2,11 @@ module example
 
 go 1.27.4
 
-replace github.com/owlsome-official/cipherPayload => ../
+replace github.com/owlsome-official/cipherPayload/v2 => ../
 
 require (
 	github.com/gofiber/fiber/v2 v2.52.16
-	github.com/owlsome-official/cipherPayload v1.0.12
+	github.com/owlsome-official/cipherPayload/v2 v2.0.0
 	github.com/rs/zerolog v1.35.1
 )
 

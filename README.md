@@ -1,86 +1,95 @@
 # CipherPayload
 
-[![made-with-Go](https://img.shields.io/badge/Made%20with-Go-1f425f.svg)](http://golang.org) [![Go Reference](https://pkg.go.dev/badge/github.com/owlsome-official/cipherPayload@v1.0.12.svg)](https://pkg.go.dev/github.com/owlsome-official/cipherPayload@v1.0.12) [![GitHub issues](https://img.shields.io/github/issues/owlsome-official/cipherPayload)](https://github.com/owlsome-official/cipherPayload/issues) [![GitHub forks](https://img.shields.io/github/forks/owlsome-official/cipherPayload)](https://github.com/owlsome-official/cipherPayload/network) [![GitHub stars](https://img.shields.io/github/stars/owlsome-official/cipherPayload)](https://github.com/owlsome-official/cipherPayload/stargazers)
+[![made-with-Go](https://img.shields.io/badge/Made%20with-Go-1f425f.svg)](http://golang.org) [![Go Reference](https://pkg.go.dev/badge/github.com/owlsome-official/cipherPayload/v2@v2.0.0.svg)](https://pkg.go.dev/github.com/owlsome-official/cipherPayload/v2@v2.0.0) [![GitHub issues](https://img.shields.io/github/issues/owlsome-official/cipherPayload)](https://github.com/owlsome-official/cipherPayload/issues) [![GitHub forks](https://img.shields.io/github/forks/owlsome-official/cipherPayload)](https://github.com/owlsome-official/cipherPayload/network) [![GitHub stars](https://img.shields.io/github/stars/owlsome-official/cipherPayload)](https://github.com/owlsome-official/cipherPayload/stargazers)
 
-CipherPayload middleware for Fiber that use AES Algorithm for encrypt and decrypt payload in request and response body.
+CipherPayload middleware for Fiber that encrypts and decrypts JSON payload in request and response body using **AES-GCM** (default, authenticated encryption) or **AES-CBC** (legacy).
+
+> **v2.0.0 Breaking Change:** Default cipher mode changed from AES-CBC to AES-GCM. See [MIGRATION.md](./MIGRATION.md) for upgrade guide.
 
 ## Table of Contents
 
 - [CipherPayload](#cipherpayload)
   - [Table of Contents](#table-of-contents)
   - [Installation](#installation)
-  - [Signatures](#signatures)
-  - [Examples](#examples)
+  - [Quick Start](#quick-start)
+    - [AES-GCM (Default, Recommended)](#aes-gcm-default-recommended)
+    - [AES-CBC (Legacy)](#aes-cbc-legacy)
+  - [Cipher Modes](#cipher-modes)
   - [Config](#config)
-  - [Default Config](#default-config)
-  - [Default Response](#default-response)
-  - [KeyPairs Property](#keypairs-property)
-  - [Payload Template](#payload-template)
+    - [Default Config](#default-config)
+  - [KeyPairs](#keypairs)
+  - [Standalone Usage](#standalone-usage)
+  - [Payload Format](#payload-format)
     - [Request](#request)
     - [Response](#response)
   - [Example Usage](#example-usage)
-  - [\[NEW!\] AES Encryption Tools (useful for debugging)](#new-aes-encryption-tools-useful-for-debugging)
+  - [AES Encryption Tools](#aes-encryption-tools)
+  - [Migration from v1](#migration-from-v1)
 
 ## Installation
 
 ```bash
-  go get -u github.com/owlsome-official/cipherPayload
+go get -u github.com/owlsome-official/cipherPayload/v2
 ```
 
-## Signatures
-
-```go
-func New(config ...Config) fiber.Handler
-```
-
-## Examples
-
-Import the middleware package that is part of the Fiber web framework
+## Quick Start
 
 ```go
 import (
   "github.com/gofiber/fiber/v2"
-  "github.com/owlsome-official/cipherPayload"
+  cipherPayload "github.com/owlsome-official/cipherPayload/v2"
 )
 ```
 
-After you initiate your Fiber app, you can use the following possibilities:
+### AES-GCM (Default, Recommended)
 
 ```go
-// Default middleware config
 app.Use(cipherPayload.New(cipherPayload.Config{
   KeyPairs: cipherPayload.KeyPairs{
-    AESKeyForEncrypt: []byte("AES_KEY_FOR_ENCRYPT"),
-    AESIVForEncrypt:  []byte("AES_IV_FOR_ENCRYPT"),
-    AESKeyForDecrypt: []byte("AES_KEY_FOR_DECRYPT"),
-    AESIVForDecrypt:  []byte("AES_IV_FOR_DECRYPT"),
+    AESKeyForEncrypt: []byte("YOUR_32_BYTE_KEY_FOR_ENCRYPT"),
+    AESKeyForDecrypt: []byte("YOUR_32_BYTE_KEY_FOR_DECRYPT"),
   },
-}))
-
-// Or extend your config for customization
-app.Use(cipherPayload.New(cipherPayload.Config{
-  KeyPairs: cipherPayload.KeyPairs{
-    AESKeyForEncrypt: []byte("AES_KEY_FOR_ENCRYPT"),
-    AESIVForEncrypt:  []byte("AES_IV_FOR_ENCRYPT"),
-    AESKeyForDecrypt: []byte("AES_KEY_FOR_DECRYPT"),
-    AESIVForDecrypt:  []byte("AES_IV_FOR_DECRYPT"),
-  },
-  AllowMethod: []string{"POST", "OPTIONS"},
-  DebugMode: true,
 }))
 ```
+
+GCM provides **authenticated encryption**: payloads that are tampered with, truncated, or encrypted with a different key are rejected. Each message uses a random 12-byte nonce.
+
+### AES-CBC (Legacy)
+
+```go
+app.Use(cipherPayload.New(cipherPayload.Config{
+  Mode: cipherPayload.ModeCBC,
+  KeyPairs: cipherPayload.KeyPairs{
+    AESKeyForEncrypt: []byte("YOUR_32_BYTE_KEY_FOR_ENCRYPT"),
+    AESIVForEncrypt:  []byte("YOUR_16_BYTE_IV_FOR_ENCRYPT"),
+    AESKeyForDecrypt: []byte("YOUR_32_BYTE_KEY_FOR_DECRYPT"),
+    AESIVForDecrypt:  []byte("YOUR_16_BYTE_IV_FOR_DECRYPT"),
+  },
+}))
+```
+
+## Cipher Modes
+
+| Mode | Algorithm | Authentication | Nonce/IV | Wire Format |
+|------|-----------|----------------|----------|-------------|
+| `ModeGCM` (default) | AES-GCM | Yes (128-bit tag) | Random 12B per message | `base64(nonce \|\| ciphertext \|\| tag)` |
+| `ModeCBC` | AES-CBC + PKCS#7 | No | Fixed IV from config | `base64(padded ciphertext)` |
 
 ## Config
 
 ```go
-// Config defines the config for middleware.
 type Config struct {
-  // Next defines a function to skip this middleware when returned true.
-
   // Optional. Default: nil
   Next func(c *fiber.Ctx) bool
 
+  // Optional. Default: ModeGCM
+  // ModeGCM: authenticated encryption with random nonce per message.
+  // ModeCBC: legacy mode with PKCS#7 padding and fixed IV.
+  Mode CipherMode
+
   // Required. Default: KeyPairs{}
+  // For ModeGCM: only Key fields are required (IV fields are ignored).
+  // For ModeCBC: all four fields (key + IV) are required.
   KeyPairs KeyPairs
 
   // Optional. Default: ["OPTIONS", "POST", "PUT", "DELETE"]
@@ -89,13 +98,11 @@ type Config struct {
   // Optional. Default: false
   DebugMode bool
 
-  // Optional. [Default: false]
+  // Optional. Default: false
   StrictMode bool
 
   // Optional. Default: true in ConfigDefault, false when omitted from a passed Config.
-  // When true, requests whose path (query string excluded) is /health or ends in /health skip encryption.
-  // This includes parameter or wildcard routes (e.g. /api/:id, /api/*) whose last segment is "health",
-  // so leave it false and use Next if such routes must stay encrypted.
+  // When true, requests whose path is /health or ends in /health skip encryption.
   ExcludeHealthAPI bool
 
   // Optional. Default: BadRequestResponse
@@ -106,18 +113,14 @@ type Config struct {
 }
 ```
 
-## Default Config
+### Default Config
 
 ```go
 var ConfigDefault = Config{
-  Next:   nil,
-  KeyPairs: KeyPairs{},
-  AllowMethod: []string{
-    fiber.MethodOptions,
-    fiber.MethodPost,
-    fiber.MethodPut,
-    fiber.MethodDelete,
-  },
+  Next:             nil,
+  Mode:             ModeGCM,
+  KeyPairs:         KeyPairs{},
+  AllowMethod:      []string{"OPTIONS", "POST", "PUT", "DELETE"},
   DebugMode:        false,
   StrictMode:       false,
   ExcludeHealthAPI: true,
@@ -126,61 +129,67 @@ var ConfigDefault = Config{
 }
 ```
 
-## Default Response
-
-```go
-func BadRequestResponse(c *fiber.Ctx, msg string) error { // 400
-  if msg == "" {
-    msg = "Bad Request"
-  }
-  res := fiber.Map{
-    "status":  "bad_request",
-    "message": msg,
-  }
-  return c.Status(fiber.StatusBadRequest).JSON(res)
-}
-
-func InternalServerErrorResponse(c *fiber.Ctx, msg string) error { // 500
-  if msg == "" {
-    msg = "Internal Server Error"
-  }
-  res := fiber.Map{
-    "status":  "internal_server_error",
-    "message": msg,
-  }
-  return c.Status(fiber.StatusInternalServerError).JSON(res)
-}
-```
-
-## KeyPairs Property
+## KeyPairs
 
 ```go
 type KeyPairs struct {
-  AESKeyForEncrypt []byte
-  AESIVForEncrypt  []byte
-  AESKeyForDecrypt []byte
-  AESIVForDecrypt  []byte
+  AESKeyForEncrypt []byte   // Required for all modes (16, 24, or 32 bytes)
+  AESIVForEncrypt  []byte   // Required for ModeCBC only (16 bytes), ignored in ModeGCM
+  AESKeyForDecrypt []byte   // Required for all modes (16, 24, or 32 bytes)
+  AESIVForDecrypt  []byte   // Required for ModeCBC only (16 bytes), ignored in ModeGCM
 }
 ```
 
-## Payload Template
+## Standalone Usage
 
-An example of payload template (see more how to work in [Example](./example))
+Use the encryption API directly without the Fiber middleware:
+
+```go
+// GCM
+cipher := cipherPayload.NewCipher(cipherPayload.ModeGCM, cipherPayload.KeyPairs{
+  AESKeyForEncrypt: key,
+  AESKeyForDecrypt: key,
+})
+encrypted, err := cipher.Encrypt(plaintext)
+decrypted, err := cipher.Decrypt(encrypted)
+
+// CBC (legacy)
+cipher := cipherPayload.NewCipher(cipherPayload.ModeCBC, cipherPayload.KeyPairs{
+  AESKeyForEncrypt: key,
+  AESIVForEncrypt:  iv,
+  AESKeyForDecrypt: key,
+  AESIVForDecrypt:  iv,
+})
+encrypted, err := cipher.Encrypt(plaintext)
+decrypted, err := cipher.Decrypt(encrypted)
+```
+
+## Default Responses
+
+When `StrictMode` is enabled, the middleware returns structured error responses:
+
+```go
+// 400 - Returned when payload is missing, empty, tampered, or cannot be decrypted.
+func BadRequestResponse(c *fiber.Ctx, msg string) error
+
+// 500 - Returned when response body cannot be encrypted.
+func InternalServerErrorResponse(c *fiber.Ctx, msg string) error
+```
+
+Example error response:
+```json
+{ "status": "bad_request", "message": "Invalid Payload" }
+```
+
+You can override these with `FailResponse` and `ErrorResponse` in `Config`.
+
+## Payload Format
 
 ### Request
 
 ```json
 {
-  "payload": "FDp1Dl31zGx5nRXFNKihB+k3ly/L7HI9tlHycbKVRwhaf3RRdyFGviuntEZqst0/"
-}
-```
-
-which can be decrypt to:
-
-```json
-{
-  "firstname": "Chinnawat",
-  "lastname": "Chimdee"
+  "payload": "<base64 encrypted string>"
 }
 ```
 
@@ -188,30 +197,34 @@ which can be decrypt to:
 
 ```json
 {
-  "payload": "tpkWPEI6F/nfgUjjtwyKSUf1erxPL6rQt8jG3RitQ1KpvRALfR5YAgQ0CXYkrwLfTid6VdK3SNlffuu/kvI7Hj7br0ur01TUFUWxQ9cl+8U="
+  "payload": "<base64 encrypted string>"
 }
 ```
 
-which encrypted from:
+The JSON envelope is the same for both modes. The base64 content differs:
 
-```json
-{
-  "firstname": "Chinnawat [Modified]",
-  "lastname": "Chimdee [Modified]"
-}
-```
-
-Note: This payload using
-
-- AESKeyForEncrypt (used in encrypting response body): `67890123456789012345678901234567`
-- AESIVForEncrypt (used in encrypting response body): `6789012345678901`
-- AESKeyForDecrypt (used in decrypting request body): `12345678901234567890123456789012`
-- AESIVForDecrypt (used in decrypting request body): `1234567890123456`
+- **GCM**: `base64(nonce[12B] || ciphertext || tag[16B])`
+- **CBC**: `base64(PKCS#7 padded ciphertext)`
 
 ## Example Usage
 
 Please go to [example/README.md](./example/README.md)
 
-## [NEW!] AES Encryption Tools (useful for debugging)
+The example runs four servers:
+- `:5000` - Plaintext API (no encryption)
+- `:8000` - AES-GCM API (v2 default)
+- `:8001` - AES-GCM + StrictMode (error showcase: 400/500 for invalid payloads)
+- `:9000` - AES-CBC API (legacy)
+
+## AES Encryption Tools
 
 [https://encrypt-tools.vercel.app/](https://encrypt-tools.vercel.app/)
+
+Use the **AES-GCM** mode (default page) to generate and verify GCM payloads.
+Use the **Legacy** page for AES-CBC payloads.
+
+GCM payloads from encrypt-tools (without AAD) are compatible with this library.
+
+## Migration from v1
+
+See [MIGRATION.md](./MIGRATION.md) for a step-by-step upgrade guide.

@@ -11,43 +11,37 @@ var (
 )
 
 func New(config ...Config) fiber.Handler {
-	// set default config
 	cfg := configDefault(config...)
 
 	panicResponseHeader := serviceName + ": Some configuration is missing: "
 
-	// config is required
 	if len(cfg.KeyPairs.AESKeyForEncrypt) == 0 {
 		panic(panicResponseHeader + "`AESKeyForEncrypt` is required.")
 	}
 
-	// config is required
-	if len(cfg.KeyPairs.AESIVForEncrypt) == 0 {
-		panic(panicResponseHeader + "`AESIVForEncrypt` is required.")
-	}
-
-	// config is required
 	if len(cfg.KeyPairs.AESKeyForDecrypt) == 0 {
 		panic(panicResponseHeader + "`AESKeyForDecrypt` is required.")
 	}
 
-	// config is required
-	if len(cfg.KeyPairs.AESIVForDecrypt) == 0 {
-		panic(panicResponseHeader + "`AESIVForDecrypt` is required.")
+	// IV fields are only required for CBC mode
+	if cfg.Mode == ModeCBC {
+		if len(cfg.KeyPairs.AESIVForEncrypt) == 0 {
+			panic(panicResponseHeader + "`AESIVForEncrypt` is required for CBC mode.")
+		}
+		if len(cfg.KeyPairs.AESIVForDecrypt) == 0 {
+			panic(panicResponseHeader + "`AESIVForDecrypt` is required for CBC mode.")
+		}
 	}
 
 	return func(c *fiber.Ctx) error {
-		// Don't execute middleware if Next returns true
 		if cfg.Next != nil && cfg.Next(c) {
 			return c.Next()
 		}
 
-		// c.Path() excludes the query string and is the path Fiber routes on
 		if cfg.ExcludeHealthAPI && isHealthPath(c.Path()) {
 			return c.Next()
 		}
 
-		// Don't execute when the method is not matched a list
 		if !isExist(cfg.AllowMethod, c.Method()) {
 			return c.Next()
 		}
@@ -67,8 +61,7 @@ func New(config ...Config) fiber.Handler {
 		}
 		logger.printf("debug", "Request:", reqBody.Payload)
 
-		// Payload Decrypting
-		encrypterDecrypter := NewAESEncryption(cfg.KeyPairs, cfg.DebugMode)
+		encrypterDecrypter := NewCipher(cfg.Mode, cfg.KeyPairs, cfg.DebugMode)
 		decryptedPayload, err := encrypterDecrypter.Decrypt(reqBody.Payload)
 		logger.printf("debug", "Decrypted:", decryptedPayload)
 		if err != nil || decryptedPayload == "" {
@@ -83,18 +76,14 @@ func New(config ...Config) fiber.Handler {
 		jsonRaw := json.RawMessage(decryptedPayload)
 		jsonBytes, _ := json.Marshal(jsonRaw)
 
-		// Set plaintext back into request body
 		logger.printf("debug", "jsonBytes:", string(jsonBytes))
 		c.Request().SetBodyRaw(jsonBytes)
 
-		// Let request to continue execute
 		c.Next()
 
-		// Intercept the response body
 		interceptBody := string(c.Response().Body())
 		logger.printf("debug", "Intercept Body:", interceptBody)
 
-		// Payload Encrypting
 		encryptedPayload, err := encrypterDecrypter.Encrypt(interceptBody)
 		logger.printf("debug", "Encrypted:", encryptedPayload)
 
@@ -104,7 +93,6 @@ func New(config ...Config) fiber.Handler {
 			return cfg.ErrorResponse(c, errMsg)
 		}
 
-		// Set ciphertext back into response body
 		var resBody PayloadBody
 		resBody.Payload = encryptedPayload
 		return c.JSON(resBody)
