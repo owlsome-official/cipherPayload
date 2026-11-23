@@ -2,7 +2,6 @@ package cipherPayload
 
 import (
 	"encoding/json"
-	"strings"
 
 	"github.com/gofiber/fiber/v2"
 )
@@ -43,8 +42,8 @@ func New(config ...Config) fiber.Handler {
 			return c.Next()
 		}
 
-		// Don't execute when url is contains "health"
-		if strings.Contains(c.OriginalURL(), "health") {
+		// c.Path() excludes the query string and is the path Fiber routes on
+		if cfg.ExcludeHealthAPI && isHealthPath(c.Path()) {
 			return c.Next()
 		}
 
