@@ -98,7 +98,7 @@ type Config struct {
   // Optional. Default: false
   DebugMode bool
 
-  // Optional. Default: false
+  // Deprecated: has no effect. Invalid payloads are always rejected (see Default Responses).
   StrictMode bool
 
   // Optional. Default: true in ConfigDefault, false when omitted from a passed Config.
@@ -122,7 +122,6 @@ var ConfigDefault = Config{
   KeyPairs:         KeyPairs{},
   AllowMethod:      []string{"OPTIONS", "POST", "PUT", "DELETE"},
   DebugMode:        false,
-  StrictMode:       false,
   ExcludeHealthAPI: true,
   FailResponse:     BadRequestResponse,
   ErrorResponse:    InternalServerErrorResponse,
@@ -166,10 +165,10 @@ decrypted, err := cipher.Decrypt(encrypted)
 
 ## Default Responses
 
-When `StrictMode` is enabled, the middleware returns structured error responses:
+For every method in `AllowMethod`, a request whose payload is missing, empty, tampered, cannot be decrypted, or does not decrypt to JSON is rejected before the next handler runs. The middleware returns structured error responses:
 
 ```go
-// 400 - Returned when payload is missing, empty, tampered, or cannot be decrypted.
+// 400 - Returned when payload is missing, empty, tampered, cannot be decrypted, or does not decrypt to JSON.
 func BadRequestResponse(c *fiber.Ctx, msg string) error
 
 // 500 - Returned when response body cannot be encrypted.
