@@ -22,6 +22,7 @@ CipherPayload middleware for Fiber that encrypts and decrypts JSON payload in re
   - [Payload Format](#payload-format)
     - [Request](#request)
     - [Response](#response)
+    - [Compressed Requests](#compressed-requests)
   - [Example Usage](#example-usage)
   - [AES Encryption Tools](#aes-encryption-tools)
   - [Migration from v1](#migration-from-v1)
@@ -205,6 +206,10 @@ The JSON envelope is the same for both modes. The base64 content differs:
 
 - **GCM**: `base64(nonce[12B] || ciphertext || tag[16B])`
 - **CBC**: `base64(PKCS#7 padded ciphertext)`
+
+### Compressed Requests
+
+A request body may use `Content-Encoding` `gzip`, `deflate`, `br` (or `brotli`), or `identity`, with at most 3 codings stacked. The decoded body is capped at the app's `BodyLimit` (Fiber's default is 4MB), and a brotli stream may not declare a window larger than that limit. Other codings, longer chains, and bodies that expand past the limit are treated as an invalid payload. The middleware removes `Content-Encoding` before it passes the decrypted body to the next handler.
 
 ## Example Usage
 
