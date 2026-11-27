@@ -54,6 +54,7 @@ content-type: application/json
 {"payload": "VKOAoFVYod2Xr60AIoZoMF6jnnbTal9lc+tAQti7HJs+2fkVAIvTkNxWygKa4qGG/qbo5LMemh3MT1TX+qxi4i0wzcA="}
 
 ### [GCM] POST /api/example - Empty payload
+// Expected: 400 {"status":"bad_request","message":"Invalid Payload"}
 POST http://localhost:8000/api/example HTTP/1.1
 content-type: application/json
 
@@ -63,9 +64,8 @@ content-type: application/json
 // :8001 - AES-GCM + StrictMode (error showcase)
 // ==========================================
 //
-// StrictMode returns proper error responses instead of silently
-// passing through. These cases demonstrate 400 Bad Request
-// for invalid/tampered/missing payloads.
+// Invalid, tampered, or missing payloads are always rejected with
+// 400 Bad Request before the handler runs (on every encrypted server).
 
 ### [Strict] 400 Bad Request - Empty body (no payload field)
 // Expected: 400 {"status":"bad_request","message":"Invalid Payload"}

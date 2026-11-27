@@ -1,5 +1,15 @@
 # Changelog
 
+## [Unreleased]
+
+### Security
+
+- Middleware now fails closed: a request on an allowed method whose payload is missing, empty, cannot be decrypted, or decrypts to empty or non-JSON plaintext is rejected with `FailResponse` (400) before the next handler runs. Previously this happened only with `StrictMode: true`; otherwise the handler ran with an empty body. Non-JSON plaintext (e.g. an unauthenticated forged AES-CBC block) reached the handler with an empty body even in `StrictMode`.
+
+### Deprecated
+
+- `Config.StrictMode` has no effect; strict validation is always on.
+
 ## [v2.0.0] - `2026-11-23`
 
 ### Breaking Changes
