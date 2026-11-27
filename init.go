@@ -10,6 +10,11 @@ var (
 	serviceName = "[Middleware] cipherPayload"
 )
 
+const (
+	invalidPayloadMsg = "Invalid Payload"
+	decryptFailMsg    = "Payload decrypt fail or Empty payload"
+)
+
 func New(config ...Config) fiber.Handler {
 	cfg := configDefault(config...)
 
@@ -49,15 +54,9 @@ func New(config ...Config) fiber.Handler {
 		logger := newLogger(cfg.DebugMode)
 
 		var reqBody PayloadBody
-		err := c.BodyParser(&reqBody)
-		if err != nil || reqBody.Payload == "" {
-			errMsg := "BodyParser error or Empty Payload"
-			if cfg.StrictMode {
-				errMsg := "Invalid Payload"
-				logger.printf("error", errMsg, string(c.Request().Body()))
-				return cfg.FailResponse(c, errMsg)
-			}
-			logger.printf("info", errMsg, string(c.Request().Body()))
+		if err := c.BodyParser(&reqBody); err != nil || reqBody.Payload == "" {
+			logger.printf("error", invalidPayloadMsg, string(c.Request().Body()))
+			return cfg.FailResponse(c, invalidPayloadMsg)
 		}
 		logger.printf("debug", "Request:", reqBody.Payload)
 
@@ -65,16 +64,15 @@ func New(config ...Config) fiber.Handler {
 		decryptedPayload, err := encrypterDecrypter.Decrypt(reqBody.Payload)
 		logger.printf("debug", "Decrypted:", decryptedPayload)
 		if err != nil || decryptedPayload == "" {
-			errMsg := "Payload decrypt fail or Empty payload"
-			if cfg.StrictMode {
-				logger.printf("error", serviceName, err)
-				return cfg.FailResponse(c, errMsg)
-			}
-			logger.printf("info", errMsg)
+			logger.printf("error", serviceName, decryptFailMsg, err)
+			return cfg.FailResponse(c, decryptFailMsg)
 		}
 
-		jsonRaw := json.RawMessage(decryptedPayload)
-		jsonBytes, _ := json.Marshal(jsonRaw)
+		jsonBytes, err := json.Marshal(json.RawMessage(decryptedPayload))
+		if err != nil {
+			logger.printf("error", serviceName, decryptFailMsg, err)
+			return cfg.FailResponse(c, decryptFailMsg)
+		}
 
 		logger.printf("debug", "jsonBytes:", string(jsonBytes))
 		c.Request().SetBodyRaw(jsonBytes)

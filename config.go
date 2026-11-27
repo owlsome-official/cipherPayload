@@ -24,7 +24,9 @@ type Config struct {
 	// Optional. Default: false
 	DebugMode bool
 
-	// Optional. [Default: false]
+	// Deprecated: has no effect. Requests on an allowed method whose payload is missing,
+	// empty, cannot be decrypted, or does not decrypt to JSON are always rejected with
+	// FailResponse before the next handler runs.
 	StrictMode bool
 
 	// Optional. Default: true in ConfigDefault, false when omitted from a passed Config.
@@ -49,7 +51,6 @@ var ConfigDefault = Config{
 		fiber.MethodDelete,
 	},
 	DebugMode:        false,
-	StrictMode:       false,
 	ExcludeHealthAPI: true,
 	FailResponse:     BadRequestResponse,
 	ErrorResponse:    InternalServerErrorResponse,
@@ -74,7 +75,6 @@ func configDefault(config ...Config) Config {
 	}
 
 	// Note: cfg.DebugMode: it's false by default.
-	// Note: cfg.StrictMode: it's false by default.
 	// Note: cfg.ExcludeHealthAPI: it's false unless set, because a bool zero value cannot be told apart from an explicit false.
 
 	// set default values
