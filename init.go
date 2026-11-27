@@ -2,13 +2,104 @@ package cipherPayload
 
 import (
 	"encoding/json"
+	"errors"
+	"slices"
+	"strings"
 
 	"github.com/gofiber/fiber/v2"
 )
 
 var (
 	serviceName = "[Middleware] cipherPayload"
+
+	errUnsupportedContentEncoding = errors.New("unsupported Content-Encoding")
+	errTooManyContentEncodings    = errors.New("too many Content-Encoding values")
+	errBrotliWindowTooLarge       = errors.New("brotli window exceeds the body limit")
 )
+
+const maxContentEncodings = 3
+
+// brotliWindowSize returns the sliding window a brotli stream declares in its
+// WBITS header (RFC 7932, section 9.1). The large-window marker counts as the
+// largest window that extension allows.
+func brotliWindowSize(stream []byte) int {
+	if len(stream) == 0 {
+		return 0
+	}
+	b := stream[0]
+	bits := 17
+	switch {
+	case b&1 == 0:
+		bits = 16
+	case (b>>1)&7 != 0:
+		bits = 17 + int((b>>1)&7)
+	case (b>>4)&7 == 1:
+		bits = 30
+	case (b>>4)&7 != 0:
+		bits = 8 + int((b>>4)&7)
+	}
+	return 1<<bits - 16
+}
+
+// decodeRequestBody expands a Content-Encoding body in place with every decoder
+// capped at the app's BodyLimit, then drops the header. Fiber's Body and
+// BodyParser expand encoded bodies without any output limit, so they must only
+// ever see the already decoded body.
+func decodeRequestBody(c *fiber.Ctx) error {
+	req := c.Request()
+
+	var encodings []string
+	for _, value := range req.Header.PeekAll(fiber.HeaderContentEncoding) {
+		for _, token := range strings.Split(string(value), ",") {
+			token = strings.ToLower(strings.TrimSpace(token))
+			if token == "" || token == "identity" {
+				continue
+			}
+			encodings = append(encodings, token)
+		}
+	}
+	req.Header.Del(fiber.HeaderContentEncoding)
+
+	if len(encodings) == 0 {
+		return nil
+	}
+	if len(encodings) > maxContentEncodings {
+		return errTooManyContentEncodings
+	}
+
+	limit := c.App().Config().BodyLimit
+	if limit <= 0 {
+		limit = fiber.DefaultBodyLimit
+	}
+
+	// Codings are listed in the order they were applied (RFC 9110, section 8.4).
+	for _, encoding := range slices.Backward(encodings) {
+		var (
+			body []byte
+			err  error
+		)
+		switch encoding {
+		case fiber.StrGzip:
+			body, err = req.BodyGunzipWithLimit(limit)
+		case fiber.StrBr, fiber.StrBrotli:
+			// The brotli decoder buffers up to the declared window before
+			// yielding output, so the output cap alone does not bound it.
+			if brotliWindowSize(req.Body()) > limit {
+				return errBrotliWindowTooLarge
+			}
+			body, err = req.BodyUnbrotliWithLimit(limit)
+		case fiber.StrDeflate:
+			body, err = req.BodyInflateWithLimit(limit)
+		default:
+			return errUnsupportedContentEncoding
+		}
+		if err != nil {
+			return err
+		}
+		req.SetBodyRaw(body)
+	}
+	return nil
+}
 
 func New(config ...Config) fiber.Handler {
 	cfg := configDefault(config...)
@@ -49,7 +140,10 @@ func New(config ...Config) fiber.Handler {
 		logger := newLogger(cfg.DebugMode)
 
 		var reqBody PayloadBody
-		err := c.BodyParser(&reqBody)
+		err := decodeRequestBody(c)
+		if err == nil {
+			err = c.BodyParser(&reqBody)
+		}
 		if err != nil || reqBody.Payload == "" {
 			errMsg := "BodyParser error or Empty Payload"
 			if cfg.StrictMode {
